@@ -2,6 +2,8 @@
 import dbClient from '../utils/db';
 import sha1 from 'sha1';
 import Queue from 'bull';
+import redisClient from '../utils/redis';
+import { ObjectID } from 'mongodb';
 
 const userQueue = new Queue('userQueue', 'redis://127.0.0.1:6379');
 
@@ -40,6 +42,29 @@ class UsersController {
 			}
 		});
 	}
+
+  static async getMe(req, res) {
+    const token = req.header('X-Token');
+    const key = `auth_${token}`;
+    const userId = await redisClient.get(key);
+
+    if (userId) {
+      const users = dbClient.db.collection('users');
+      const idObject = new ObjectID(userId);
+
+      users.findOne({ _id: idObject }, (err, user) => {
+        if (err) throw err;
+        if (user) {
+          res.status(201).json({ id: userId, email: user.email });
+        } else {
+          res.status(401).json({ error: 'Unauthorized' });
+        }
+      });
+    } else {
+      console.log(`token ${token} Does not exist`);
+      res.status(401).json({ error: 'Unauthorized' });
+    }
+  }
 }
 
 module.exports = UsersController;
